@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset='UTF-8'>
+    <title>Backdoor Flasher</title>
+
+    <!-- Insert this line above script imports // https://stackoverflow.com/questions/32621988/electron-jquery-is-not-defined -->
+    <script>if (typeof module === 'object') { window.module = module; module = undefined; }</script>
+
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js'></script>
+
+    <link rel='stylesheet' type='text/css' href='https://cdn.jsdelivr.net/npm/semantic-ui@2.4.2/dist/semantic.min.css'>
+    <script src='https://cdn.jsdelivr.net/npm/semantic-ui@2.4.2/dist/semantic.min.js'></script>
+
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/7.33.1/sweetalert2.all.min.js'></script>
+
+    <!-- Insert this line after script imports -->
+    <script>if (window.module) module = window.module;</script>
+
+    <style type='text/css'>
+        .footer {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            background-color: rgb(230, 230, 230);
+            text-align: right;
+        }
+    </style>
+</head>
+
+<body style='background-color:rgb(230, 230, 230);'>
+    <button class='url ui medium circular inverted violet link icon button' data='https://www.ti.com/lit/ug/swcu117h/swcu117h.pdf'
+        title='Technical Reference Manual' style='position:absolute; right:40px; top:5px; z-index:1;'>
+        <i class='microchip icon'></i>
+    </button>
+
+    <button class='url ui medium circular inverted violet link icon button' data='https://github.com/arisoik/backdoor_flasher'
+        title='Check for Updates' style='position:absolute; right:0px; top:5px; z-index:1;'>
+        <i class='github icon'></i>
+    </button>
+
+    <div style='position:absolute; left:0px; top:25px; width:100%; padding-left:5px; padding-right:5px;'>
+        <form class='ui form'>
+            <h4 class='ui dividing header'>Flashing Parameters</h4>
+            <div class='three fields'>
+                <div class='three wide field' title='Click to refresh serial ports list'>
+                    <label>Serial Port</label>
+                    <select id='portsDrp' class='ui fluid dropdown' size='4'>
+                        <option value=''>--</option>
+                    </select>
+                </div>
+
+                <div class='three wide field'>
+                    <label>Baud Rate</label>
+                    <div class='ui input'>
+                        <input id='baudrateInput' type='text' placeholder='e.g. 115200' title='Only positive numbers are accepted'>
+                    </div>
+                </div>
+
+                <div class='ten wide field'>
+                    <label>Hex File</label>
+                    <input id='fileDialog' type='file' name='file[]' accept='.hex' style='display:none;' />
+                    <div class='ui left icon input' title='Only .hex files are accepted'>
+                        <i id='fileDialogBtn' class='inverted circular link file icon'></i>
+                        <input id='filenameFld' type='text' placeholder=' No .hex file chosen...' readonly>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <button id='flashBtn' class='ui big circular violet icon button' style='position:absolute; left:50%; top:175px; transform:translate(-50%, -50%);'
+        title='Flash firmware'><i class='bolt icon'></i>
+    </button>
+
+    <div style='position:absolute; left:0px; top:40%; width:100%; height:57%; padding-left:5px; padding-right:5px;'>
+        <form class='ui form' style='height:100%;'>
+            <h4 class='ui dividing header'>Flashing Progress</h4>
+            <div class='field'>
+                <div id='progressbar' class='ui indicating progress' style='margin-top:5px; margin-bottom:20px;'>
+                    <div class='bar'></div>
+                    <div class='label'>Waiting...</div>
+                </div>
+            </div>
+            <div class='field' style='height:75%;'>
+                <label>Logging</label>
+                <textarea id='logTextarea' style='height:90%;' readonly></textarea>
+            </div>
+        </form>
+    </div>
+
+    <div class='footer'>
+        <div class='summary' style='padding-right:5px;'>
+            <i>Made with
+                <a class='url' data='https://electronjs.org/' href='#'>Electron</a> and
+                <a class='url' data='https://semantic-ui.com/' href='#'>Semantic UI</a>
+            </i>
+        </div>
+    </div>
+
+    <script>
+        $(window).on('load', function () {
+            const electron = require('electron');
+            const ipc = electron.ipcRenderer;
+
+            $('.url').on('click', function () {
+                ipc.send('open-URL', $(this).attr('data'));
+            });
+
+            var fileDialog = document.getElementById('fileDialog');
+            fileDialog.addEventListener('change', function (e) {
+                var file = e.target.files[0];
+                $('#filenameFld').val(file.path);
+            });
+
+            $('#fileDialogBtn').on('click', function () {
+                $('#fileDialog').trigger('click');
+            });
+
+            $('#flashBtn').on('click', function () {
+                if ($(this).hasClass('disabled') === false) {
+                    $(this).addClass('disabled loading');
+
+                    $('#progressbar').progress({
+                        label: true,
+                        total: 100,
+                        text: {
+                            active: '{percent}% Complete',
+                            success: 'Completed!'
+                        }
+                    });
+
+                    const arg = {
+                        'port': $('#portsDrp').dropdown('get text'),
+                        'baudRate': parseInt($('#baudrateInput').val()),
+                        'hexFilename': $('#filenameFld').val()
+                    };
+
+                    var isParamsValid = true;
+                    var errorMsg = '';
+                    if (arg.port === '--') {
+                        isParamsValid = false;
+                        errorMsg += '- Serial Port' + '</br>';
+                        $('#portsDrp').parent().addClass('error');
+                    }
+                    if (isNaN(arg.baudRate) || arg.baudRate < 0) {
+                        isParamsValid = false;
+                        errorMsg += '- Baud Rate' + '</br>';
+                        $('#baudrateInput').parent().addClass('error');
+                        $('#baudrateInput').val('');
+                    }
+                    if (arg.hexFilename === '' || arg.hexFilename.split('.').pop().toLowerCase() !== 'hex') {
+                        isParamsValid = false;
+                        errorMsg += '- Hex File';
+                        $('#filenameFld').parent().addClass('error');
+                        $('#filenameFld').val('');
+                    }
+
+                    if (isParamsValid === false) {
+                        $(this).removeClass('disabled loading');
+                        Swal({
+                            type: 'error',
+                            title: 'Invalid Parameters:',
+                            html: errorMsg,
+                            allowOutsideClick: false
+                        });
+                    } else {
+                        $(this).addClass('disabled loading');
+                        ipc.send('start-flash', arg);
+                    }
+                }
+            });
+
+            $('#portsDrp').dropdown({
+                onChange: function (value, text, $selectedItem) {
+                    $(this).parent().removeClass('error');
+                }
+            });
+            $('#portsDrp').parent().click(function () {
+                const reply = ipc.sendSync('sync-list-ports');
+                $('#portsDrp').empty();
+                if (reply.length === 0) {
+                    $('#portsDrp').dropdown('restore defaults');
+                } else {
+                    for (var i = 0; i < reply.length; i++) {
+                        var comName = reply[i].comName;
+                        $('#portsDrp').append($('<option></option>').attr('value', comName).text(comName));
+                    }
+                }
+            });
+            $('#portsDrp').parent().click();
+
+            ipc.on('process-status', function (event, arg) {
+                if (arg.type === 'log') {
+                    appendLog(arg.log);
+                } else if (arg.type === 'error' || arg.type === 'success') {
+                    if (arg.type === 'error') {
+                        $('#progressbar').progress('reset');
+                        setTimeout(() => {
+                            $('#progressbar').removeClass('active error warning success');
+                            $('#progressbar').find('.label').text('Waiting...');
+                        }, 500);
+                    }
+
+                    if (arg.log) {
+                        appendLog(arg.log);
+                    }
+                    if (arg.msg) {
+                        Swal({
+                            type: arg.type,
+                            title: 'Flashing Progress',
+                            html: arg.msg,
+                            allowOutsideClick: false
+                        });
+                    }
+
+                    $('#flashBtn').removeClass('disabled loading');
+                } else if (arg.type === 'progress') {
+                    $('#progressbar').progress('set percent', arg.percent);
+                }
+            });
+
+
+            // HELPER FUNCTIONS //
+            function appendLog(msg) {
+                var $logTextarea = $('#logTextarea');
+                $logTextarea.append(msg + '\n');
+                $logTextarea.scrollTop($logTextarea[0].scrollHeight - $logTextarea.height());
+            }
+        });
+    </script>
+</body>
+
+</html>

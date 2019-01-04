@@ -1,0 +1,49 @@
+{
+  "name": "backdoor_flasher",
+  "version": "1.0.0",
+  "description": "A tool for flashing TI's CC13x0, CC26x0 SimpleLink™ Wireless MCUs via their UART backdoor.",
+  "main": "main.js",
+  "scripts": {
+    "install": "run-script-os",
+    "install:win32": ".\\node_modules\\.bin\\electron-rebuild.cmd",
+    "install:linux": "sudo apt -y install libgconf2-4 && ./node_modules/.bin/electron-rebuild",
+    "install:darwin": "./node_modules/.bin/electron-rebuild",
+    "start": "electron .",
+    "build": "run-script-os",
+    "build:win32": "electron-builder --win --ia32",
+    "build:linux": "electron-builder --linux --x64",
+    "build:darwin": "electron-builder --mac --x64"
+  },
+  "build": {
+    "productName": "Backdoor Flasher",
+    "artifactName": "${productName} v${version}.${ext}",
+    "directories": {
+      "output": "release-builds",
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": "portable"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "Development"
+    }
+  },
+  "repository": "https://github.com/arisoik/backdoor_flasher",
+  "author": "Aristeidis Oikonomou",
+  "license": "MIT",
+  "dependencies": {
+    "intel-hex": "^0.1.1",
+    "serialport": "^7.1.1"
+  },
+  "devDependencies": {
+    "electron": "^2.0.16",
+    "electron-builder": "^20.38.4",
+    "electron-rebuild": "^1.8.2",
+    "run-script-os": "^1.0.5"
+  }
+}
